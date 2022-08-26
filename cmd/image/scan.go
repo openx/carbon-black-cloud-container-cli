@@ -101,7 +101,7 @@ func saveReport(result *image.ScannedImage) {
 	for key, value := range vulnts {
 		summary += fmt.Sprintf("%s - %d\n", key, value)
 	}
-	if err := os.WriteFile("conclusion", []byte(conclusion), 0644); err != nil {
+	if err := os.WriteFile("./conclusion", []byte(conclusion), 0644); err != nil {
 		logrus.Errorln("Cannot save conclusion file", err)
 	}
 	if err := os.WriteFile("report.md", []byte(summaryTable), 0644); err != nil {

@@ -8,7 +8,6 @@ package image
 import (
 	"context"
 	"fmt"
-
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
@@ -22,6 +21,7 @@ import (
 	"github.com/vmware/carbon-black-cloud-container-cli/pkg/model/image"
 	"github.com/vmware/carbon-black-cloud-container-cli/pkg/presenter"
 	"github.com/vmware/carbon-black-cloud-container-cli/pkg/scan"
+	"os"
 )
 
 var scanHandler *scan.Handler
@@ -66,6 +66,50 @@ func handleScan(input string) {
 	}
 
 	bus.Publish(bus.NewEvent(bus.ScanFinished, presenter.NewPresenter(result, opts.presenterOption), true))
+	//file, _ := json.MarshalIndent(result, "", " ")
+	//
+	//_ = ioutil.WriteFile("result.json", file, 0644)
+	saveReport(result)
+}
+
+func saveReport(result *image.ScannedImage) {
+	conclusion := "success"
+	summaryTable := fmt.Sprintln("|    VULN ID     |  PACKAGE  | TYPE | SEVERITY | FIX AVAILABLE |")
+	summaryTable += fmt.Sprintln("|---|---|---|---|---|")
+	vulnPrefix := ""
+	vulnts := map[string]int{image.SeverityCritical: 0, image.SeverityHigh: 0,
+		image.SeverityMedium: 0, image.SeverityLow: 0}
+	for _, vuln := range result.Vulnerabilities {
+		if (vuln.Severity == image.SeverityCritical || vuln.Severity == image.SeverityHigh) && vuln.FixAvailable == "" {
+			conclusion = "failure"
+		}
+		switch vuln.Severity {
+		case image.SeverityCritical:
+			vulnPrefix = "🚫"
+		case image.SeverityHigh:
+			vulnPrefix = "🔴"
+		case image.SeverityMedium:
+			vulnPrefix = "🟠️"
+		case image.SeverityLow:
+			vulnPrefix = "🟡"
+		}
+		vulnts[vuln.Severity] += 1
+		summaryTable += fmt.Sprintf("|%s|%s|%s|%s%s|%s|\n", vuln.ID, vuln.Package,
+			vuln.Type, vulnPrefix, vuln.Severity, vuln.FixAvailable)
+	}
+	summary := ""
+	for key, value := range vulnts {
+		summary += fmt.Sprintf("%s - %d\n", key, value)
+	}
+	if err := os.WriteFile("./conclusion", []byte(conclusion), 0644); err != nil {
+		logrus.Errorln("Cannot save conclusion file", err)
+	}
+	if err := os.WriteFile("report.md", []byte(summaryTable), 0644); err != nil {
+		logrus.Errorln("Cannot save report file", err)
+	}
+	if err := os.WriteFile("summary.md", []byte(summary), 0644); err != nil {
+		logrus.Errorln("Cannot save summary file", err)
+	}
 }
 
 func actualScan(input string, handler *scan.Handler, buildStep, namespace string) (*image.ScannedImage, bool) {

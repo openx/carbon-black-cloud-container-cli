@@ -265,13 +265,11 @@ func (h Handler) GetResponseFromScanAPI(digest string) (*image.ScannedImage, err
 			return nil, cberr.NewError(cberr.TimeoutErr, "Time out during status polling", nil)
 		case <-ticker.C:
 			go func() {
-				if status, err := h.GetImageAnalysisStatus(digest); err == nil {
-					statusResult <- status
-				} else {
-					statusResult <- FailedStatus
-				}
+				status, _ := h.GetImageAnalysisStatus(digest)
+				statusResult <- status
 			}()
 		case result := <-statusResult:
+			logrus.Infof("Got status %+v", result)
 			switch result {
 			case FinishedStatus:
 				return h.GetImageVulnerability(digest)
